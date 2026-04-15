@@ -9,13 +9,12 @@ EventEmitter.defaultMaxListeners = 100;
 
 import es from 'event-stream';
 import fancyLog from 'fancy-log';
-import glob from 'glob';
 import gulp from 'gulp';
 import filter from 'gulp-filter';
 import plumber from 'gulp-plumber';
 import sourcemaps from 'gulp-sourcemaps';
 import * as path from 'path';
-import * as nodeUtil from 'util';
+import * as fs from 'fs';
 import * as ext from './lib/extensions.ts';
 import { getVersion } from './lib/getVersion.ts';
 import { createReporter } from './lib/reporter.ts';
@@ -24,9 +23,22 @@ import * as tsb from './lib/tsb/index.ts';
 import { createTsgoStream, spawnTsgo } from './lib/tsgo.ts';
 import * as util from './lib/util.ts';
 import watcher from './lib/watch/index.ts';
+import { globAsync } from './lib/glob.ts';
 
 const root = path.dirname(import.meta.dirname);
 const commit = getVersion(root);
+const productJson = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'));
+const excludedExtensions = new Set<string>(Array.isArray(productJson.lumesyncExcludedExtensions) ? productJson.lumesyncExcludedExtensions : []);
+
+function isExcludedExtensionFromPath(p: string): boolean {
+	const normalized = p.replace(/\\/g, '/');
+	const segments = normalized.split('/');
+	const extensionsIndex = segments.indexOf('extensions');
+	if (extensionsIndex < 0 || extensionsIndex + 1 >= segments.length) {
+		return false;
+	}
+	return excludedExtensions.has(segments[extensionsIndex + 1]);
+}
 
 // Tracks active extension compilations to emit aggregate
 // "Starting compilation" / "Finished compilation" messages
@@ -92,11 +104,7 @@ const compilations = [
 	'extensions/vscode-colorize-tests/tsconfig.json',
 	'extensions/vscode-colorize-perf-tests/tsconfig.json',
 	'extensions/vscode-test-resolver/tsconfig.json',
-
-	'.vscode/extensions/vscode-selfhost-test-provider/tsconfig.json',
-	'.vscode/extensions/vscode-selfhost-import-aid/tsconfig.json',
-	'.vscode/extensions/vscode-extras/tsconfig.json',
-];
+].filter(tsconfigFile => !isExcludedExtensionFromPath(tsconfigFile));
 
 const getBaseUrl = (out: string) => `https://main.vscode-cdn.net/sourcemaps/${commit}/${out}`;
 
@@ -304,10 +312,10 @@ async function buildWebExtensions(isWatch: boolean): Promise<void> {
 	const extensionsPath = path.join(root, 'extensions');
 
 	// Find all esbuild.browser.mts files
-	const esbuildConfigLocations = await nodeUtil.promisify(glob)(
+	const esbuildConfigLocations = await globAsync(
 		path.join(extensionsPath, '**', 'esbuild.browser.mts'),
 		{ ignore: ['**/node_modules'] }
-	);
+	).then(locations => locations.filter(script => !isExcludedExtensionFromPath(script)));
 
 	const promises: Promise<unknown>[] = [];
 

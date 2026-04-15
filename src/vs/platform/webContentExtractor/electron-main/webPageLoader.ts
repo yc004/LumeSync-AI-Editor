@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { BeforeSendResponse, BrowserWindow, BrowserWindowConstructorOptions, Event, HeadersReceivedResponse, OnBeforeSendHeadersListenerDetails, OnHeadersReceivedListenerDetails } from 'electron';
+import type { BeforeSendResponse, BrowserWindow, BrowserWindowConstructorOptions, Event, HeadersReceivedResponse, OnBeforeSendHeadersListenerDetails, OnHeadersReceivedListenerDetails } from 'electron/main';
 import { Queue, raceTimeout, TimeoutTimer } from '../../../base/common/async.js';
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { createSingleCallFunction } from '../../../base/common/functional.js';

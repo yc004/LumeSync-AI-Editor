@@ -35,12 +35,11 @@ import { getCopilotExcludeFilter, copyCopilotNativeDeps, prepareBuiltInCopilotEx
 import type { EmbeddedProductInfo } from './lib/embeddedType.ts';
 import { useEsbuildTranspile } from './buildConfig.ts';
 import { promisify } from 'util';
-import globCallback from 'glob';
 import rceditCallback from 'rcedit';
 import * as cp from 'child_process';
+import { globAsync } from './lib/glob.ts';
 
 
-const glob = promisify(globCallback);
 const rcedit = promisify(rceditCallback);
 const root = path.dirname(import.meta.dirname);
 const commit = getVersion(root);
@@ -652,9 +651,9 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 	return async () => {
 		const versionedResourcesFolder = util.getVersionedResourcesFolder('win32', commit!);
 		const deps = (await Promise.all([
-			glob('**/*.node', { cwd, ignore: 'extensions/node_modules/@parcel/watcher/**' }),
-			glob('**/rg.exe', { cwd }),
-			glob('**/*explorer_command*.dll', { cwd }),
+			globAsync('**/*.node', { cwd, ignore: 'extensions/node_modules/@parcel/watcher/**' }),
+			globAsync('**/rg.exe', { cwd }),
+			globAsync('**/*explorer_command*.dll', { cwd }),
 		])).flatMap(o => o);
 		const packageJson = JSON.parse(await fs.promises.readFile(path.join(cwd, versionedResourcesFolder, 'resources', 'app', 'package.json'), 'utf8'));
 		const product = JSON.parse(await fs.promises.readFile(path.join(cwd, versionedResourcesFolder, 'resources', 'app', 'product.json'), 'utf8'));

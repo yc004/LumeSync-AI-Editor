@@ -38,7 +38,7 @@ if (!process.env['VSCODE_SKIP_NODE_VERSION_CHECK']) {
 }
 
 if (process.env.npm_execpath?.includes('yarn')) {
-	console.error('\x1b[1;31m*** Seems like you are using `yarn` which is not supported in this repo any more, please use `npm i` instead. ***\x1b[0;0m');
+	console.error('\x1b[1;31m*** Seems like you are using `yarn` which is not supported in this repo any more, please use `pnpm install` instead. ***\x1b[0;0m');
 	throw new Error();
 }
 
@@ -117,7 +117,11 @@ function hasSupportedVisualStudioVersion() {
 
 function installHeaders() {
 	const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-	child_process.execSync(`${npm} ${process.env.npm_command || 'ci'}`, {
+	const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+	const isPnpmUserAgent = (process.env['npm_config_user_agent'] || '').startsWith('pnpm/');
+	const packageManager = isPnpmUserAgent ? pnpm : npm;
+	const packageManagerCommand = isPnpmUserAgent ? 'install --no-frozen-lockfile' : (process.env.npm_command || 'ci');
+	child_process.execSync(`${packageManager} ${packageManagerCommand}`, {
 		env: process.env,
 		cwd: path.join(import.meta.dirname, 'gyp'),
 		stdio: 'inherit'

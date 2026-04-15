@@ -108,11 +108,17 @@ export class NodeJSFileWatcherLibrary extends Disposable {
 		try {
 			const stat = await promises.stat(this.request.path);
 
-			if (this.cts.token.isCancellationRequested) {
+			if (this.cts.token.isCancellationRequested || this._store.isDisposed) {
 				return;
 			}
 
-			this._register(await this.doWatch(stat.isDirectory()));
+			const disposable = await this.doWatch(stat.isDirectory());
+			if (this.cts.token.isCancellationRequested || this._store.isDisposed) {
+				disposable.dispose();
+				return;
+			}
+
+			this._register(disposable);
 		} catch (error) {
 			if (error.code !== 'ENOENT') {
 				this.error(error);

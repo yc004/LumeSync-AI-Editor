@@ -24,7 +24,6 @@ import gunzip from 'gulp-gunzip';
 import { untar } from './lib/util.ts';
 import File from 'vinyl';
 import * as fs from 'fs';
-import glob from 'glob';
 import { promisify } from 'util';
 import rceditCallback from 'rcedit';
 import { compileBuildWithManglingTask } from './gulpfile.compile.ts';
@@ -36,6 +35,7 @@ import buildfile from './buildfile.ts';
 import { fetchUrls, fetchGithub } from './lib/fetch.ts';
 import { getCopilotExcludeFilter, copyCopilotNativeDeps, prepareBuiltInCopilotExtensionShims } from './lib/copilot.ts';
 import jsonEditor from 'gulp-json-editor';
+import { globAsync, globSync } from './lib/glob.ts';
 
 
 const rcedit = promisify(rceditCallback);
@@ -283,7 +283,7 @@ function packageTask(type: string, platform: string, arch: string, sourceFolderN
 				}
 			}
 		};
-		const localWorkspaceExtensions = glob.sync('extensions/*/package.json')
+		const localWorkspaceExtensions = globSync('extensions/*/package.json')
 			.filter((extensionPath) => {
 				if (type === 'reh-web') {
 					return true; // web: ship all extensions for now
@@ -434,8 +434,8 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 
 	return async () => {
 		const deps = (await Promise.all([
-			promisify(glob)('**/*.node', { cwd }),
-			promisify(glob)('**/rg.exe', { cwd }),
+			globAsync('**/*.node', { cwd }),
+			globAsync('**/rg.exe', { cwd }),
 		])).flatMap(o => o);
 		const packageJsonContents = JSON.parse(await fs.promises.readFile(path.join(cwd, 'package.json'), 'utf8'));
 		const productContents = JSON.parse(await fs.promises.readFile(path.join(cwd, 'product.json'), 'utf8'));

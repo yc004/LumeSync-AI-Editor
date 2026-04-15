@@ -9,7 +9,7 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { IBrowserViewBounds, IBrowserViewState, IBrowserViewService, BrowserViewStorageScope, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions, BrowserViewCommandId } from '../common/browserView.js';
 import { IElementData } from '../../browserElements/common/browserElements.js';
-import { clipboard, Menu, MenuItem } from 'electron';
+import { clipboard, Menu, MenuItem } from 'electron/main';
 import { IEnvironmentMainService } from '../../environment/electron-main/environmentMainService.js';
 import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { BrowserView } from './browserView.js';

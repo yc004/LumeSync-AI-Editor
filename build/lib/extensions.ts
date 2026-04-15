@@ -6,7 +6,6 @@
 import es from 'event-stream';
 import fs from 'fs';
 import cp from 'child_process';
-import glob from 'glob';
 import gulp from 'gulp';
 import path from 'path';
 import crypto from 'crypto';
@@ -25,6 +24,7 @@ import { type IExtensionDefinition, getExtensionStream } from './builtInExtensio
 import { fetchUrls, fetchGithub } from './fetch.ts';
 import { createTsgoStream, spawnTsgo } from './tsgo.ts';
 import vzip from 'gulp-vinyl-zip';
+import { globSync } from './glob.ts';
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -183,7 +183,7 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 	}).then(fileNames => {
 		if (packagedDependencies.length > 0) {
 			const packagedDependencyFileNames = packagedDependencies.flatMap(dependency =>
-				glob.sync(path.join(extensionPath, 'node_modules', dependency, '**'), { nodir: true, dot: true })
+				globSync(path.join(extensionPath, 'node_modules', dependency, '**'), { nodir: true, dot: true })
 					.map(filePath => path.relative(extensionPath, filePath))
 					.filter(filePath => {
 						// Exclude non-.node files from build directories to avoid timestamp-sensitive
@@ -311,7 +311,7 @@ const nativeExtensions = [
 	'microsoft-authentication',
 ];
 
-const excludedExtensions = [
+const excludedExtensionsDefault = [
 	'copilot',
 	'vscode-api-tests',
 	'vscode-colorize-tests',
@@ -332,6 +332,8 @@ const marketplaceWebExtensionsExclude = new Set([
 const productJson = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../product.json'), 'utf8'));
 const builtInExtensions: IExtensionDefinition[] = productJson.builtInExtensions || [];
 const webBuiltInExtensions: IExtensionDefinition[] = productJson.webBuiltInExtensions || [];
+const productExcludedExtensions: string[] = Array.isArray(productJson.lumesyncExcludedExtensions) ? productJson.lumesyncExcludedExtensions : [];
+const excludedExtensions = Array.from(new Set([...excludedExtensionsDefault, ...productExcludedExtensions]));
 
 type ExtensionKind = 'ui' | 'workspace' | 'web';
 interface IExtensionManifest {
@@ -413,7 +415,7 @@ export function packageAllLocalExtensionsStream(forWeb: boolean, disableMangle: 
 function doPackageLocalExtensionsStream(forWeb: boolean, disableMangle: boolean, native: boolean): Stream {
 	const nativeExtensionsSet = new Set(nativeExtensions);
 	const localExtensionsDescriptions = (
-		(glob.sync('extensions/*/package.json') as string[])
+		(globSync('extensions/*/package.json') as string[])
 			.map(manifestPath => {
 				const absoluteManifestPath = path.join(root, manifestPath);
 				const extensionPath = path.dirname(path.join(root, manifestPath));
@@ -598,7 +600,7 @@ const esbuildMediaScripts = [
 	'mermaid-chat-features/esbuild.webview.mts',
 	'notebook-renderers/esbuild.notebook.mts',
 	'simple-browser/esbuild.webview.mts',
-];
+].filter(script => !excludedExtensions.includes(script.split('/')[0]));
 
 export function buildExtensionMedia(isWatch: boolean, outputRoot?: string): Promise<void> {
 	return esbuildExtensions('esbuilding extension media', isWatch, esbuildMediaScripts.map(p => ({

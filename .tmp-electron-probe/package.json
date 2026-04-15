@@ -1,0 +1,5 @@
+{
+  "name": "probe",
+  "main": "main.js",
+  "type": "module"
+}

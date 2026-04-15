@@ -1,0 +1,1 @@
+const electron = require('electron'); console.log('keys', Object.keys(electron).slice(0,10)); console.log('app?', !!electron.app); electron.app.exit(0);

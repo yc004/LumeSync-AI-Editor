@@ -6,7 +6,7 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { deepClone } from '../../../base/common/objects.js';
-import { IpcMainEvent } from 'electron';
+import { IpcMainEvent } from 'electron/main';
 import { validatedIpcMain } from '../../../base/parts/ipc/electron-main/ipcMain.js';
 import { Client as MessagePortClient } from '../../../base/parts/ipc/electron-main/ipc.mp.js';
 import { IEnvironmentMainService } from '../../environment/electron-main/environmentMainService.js';

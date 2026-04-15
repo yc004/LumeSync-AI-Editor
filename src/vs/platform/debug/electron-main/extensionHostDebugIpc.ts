@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron/main';
 import type { Server } from 'http';
 import { Socket } from 'net';
 import { VSBuffer } from '../../../base/common/buffer.js';

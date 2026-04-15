@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { session } from 'electron';
+import { session } from 'electron/main';
 import { joinPath } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
@@ -38,7 +38,7 @@ export class BrowserSession {
 	// #region Static registry
 
 	/**
-	 * Primary store â€” keyed by Electron session so entries are
+	 * Primary store â€?keyed by Electron session so entries are
 	 * automatically removed when the Electron session is GC'd.
 	 *
 	 * The goal is to ensure that BrowserSessions have the exact same lifespan as their Electron sessions.

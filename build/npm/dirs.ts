@@ -3,7 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
+
+const productJsonPath = path.join(import.meta.dirname, '..', '..', 'product.json');
+const productJson = JSON.parse(readFileSync(productJsonPath, 'utf8'));
+const excludedExtensions = new Set<string>(Array.isArray(productJson.lumesyncExcludedExtensions) ? productJson.lumesyncExcludedExtensions : []);
+
+function includeDir(dir: string): boolean {
+	if (!dir.startsWith('extensions/')) {
+		return true;
+	}
+
+	const name = dir.split('/')[1];
+	if (!name) {
+		return true;
+	}
+
+	return !excludedExtensions.has(name);
+}
 
 /**
  * Complete list of directories where npm should be executed to install node modules
@@ -63,7 +81,7 @@ export const dirs = [
 	'.vscode/extensions/vscode-selfhost-import-aid',
 	'.vscode/extensions/vscode-selfhost-test-provider',
 	'.vscode/extensions/vscode-extras',
-];
+].filter(includeDir);
 
 if (existsSync(`${import.meta.dirname}/../../.build/distro/npm`)) {
 	dirs.push('.build/distro/npm');

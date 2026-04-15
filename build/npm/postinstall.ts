@@ -11,6 +11,10 @@ import { dirs } from './dirs.ts';
 import { root, stateFile, stateContentsFile, computeState, computeContents, isUpToDate } from './installStateHash.ts';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const isPnpmUserAgent = (process.env['npm_config_user_agent'] || '').startsWith('pnpm/');
+const packageManager = isPnpmUserAgent ? pnpm : npm;
+const packageManagerName = isPnpmUserAgent ? 'pnpm' : 'npm';
 const rootNpmrcConfigKeys = getNpmrcConfigKeys(path.join(root, '.npmrc'));
 
 function log(dir: string, message: string) {
@@ -60,7 +64,13 @@ async function npmInstallAsync(dir: string, opts?: child_process.SpawnOptions): 
 		shell: true,
 	};
 
-	const command = process.env['npm_command'] || 'install';
+	const installArgs = isPnpmUserAgent
+		? ['install', '--no-frozen-lockfile']
+		: (() => {
+			const command = process.env['npm_command'] || 'install';
+			const commandArgs = command.split(' ').filter(Boolean);
+			return commandArgs.length ? commandArgs : ['install'];
+		})();
 
 	if (process.env['VSCODE_REMOTE_DEPENDENCIES_CONTAINER_NAME'] && /^(.build\/distro\/npm\/)?remote$/.test(dir)) {
 		const syncOpts: child_process.SpawnSyncOptions = {
@@ -87,8 +97,8 @@ async function npmInstallAsync(dir: string, opts?: child_process.SpawnOptions): 
 		], syncOpts);
 		run('sudo', ['chown', '-R', `${userinfo.uid}:${userinfo.gid}`, `${path.resolve(root, dir)}`], syncOpts);
 	} else {
-		log(dir, 'Installing dependencies...');
-		const output = await spawnAsync(npm, command.split(' '), finalOpts);
+		log(dir, `Installing dependencies with ${packageManagerName}...`);
+		const output = await spawnAsync(packageManager, installArgs, finalOpts);
 		if (output.trim()) {
 			for (const line of output.trim().split('\n')) {
 				log(dir, line);
@@ -306,7 +316,7 @@ async function main() {
 
 	// JS-only dirs run in parallel
 	const concurrency = Math.min(os.cpus().length, 8);
-	log('.', `Running ${parallelTasks.length} npm installs with concurrency ${concurrency}...`);
+	log('.', `Running ${parallelTasks.length} ${packageManagerName} installs with concurrency ${concurrency}...`);
 	await runWithConcurrency(parallelTasks, concurrency);
 
 	child_process.execSync('git config pull.rebase merges');
