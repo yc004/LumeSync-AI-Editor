@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LumeSync AI Editor</title>
+    <script>
+      const root = document.documentElement;
+      const defaults = {
+        '--vscode-font-family': '"IBM Plex Sans", "Segoe UI", sans-serif',
+        '--vscode-editor-font-family': '"IBM Plex Mono", "Cascadia Code", monospace',
+        '--vscode-editor-background': '#07111f',
+        '--vscode-editor-foreground': '#e2ecf7',
+        '--vscode-sideBar-background': '#091523',
+        '--vscode-sideBar-border': 'rgba(148, 163, 184, 0.16)',
+        '--vscode-panel-border': 'rgba(148, 163, 184, 0.18)',
+        '--vscode-input-background': 'rgba(8, 23, 37, 0.88)',
+        '--vscode-input-foreground': '#e6f0fa',
+        '--vscode-input-border': 'rgba(93, 211, 255, 0.24)',
+        '--vscode-button-background': '#118ab2',
+        '--vscode-button-foreground': '#ecfeff',
+        '--vscode-button-hoverBackground': '#0f7799',
+        '--vscode-descriptionForeground': '#8ca4b8',
+        '--vscode-focusBorder': '#5dd3ff',
+      };
+      Object.entries(defaults).forEach(([key, value]) => {
+        if (!getComputedStyle(root).getPropertyValue(key).trim()) {
+          root.style.setProperty(key, value);
+        }
+      });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
