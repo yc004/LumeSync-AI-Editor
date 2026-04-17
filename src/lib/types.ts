@@ -29,6 +29,9 @@ export type ChatMessage = {
 
 export type BridgeMessage =
   | { type: 'bootstrap'; payload: { manifest: CourseManifest; slides: SlideSource[]; chat: ChatMessage[] } }
+  | { type: 'create-course'; payload: { source: string } }
+  | { type: 'open-course'; payload: Record<string, never> }
+  | { type: 'save-course'; payload: { manifest: CourseManifest; slides: SlideSource[] } }
   | { type: 'save-slide'; payload: { file: string; source: string } }
   | { type: 'apply-ai-result'; payload: { slideId: string; source: string } }
   | { type: 'request-preview'; payload: { file: string; source: string } }
@@ -43,6 +46,9 @@ export type BridgeApi = {
   postMessage: (type: BridgeMessage['type'], payload: BridgeMessage['payload']) => void;
   onMessage: (handler: BridgeHandler) => () => void;
   requestInitialData: () => void;
+  createCourse: (payload: { source: string }) => void;
+  openCourse: () => void;
+  saveCourse: (payload: { manifest: CourseManifest; slides: SlideSource[] }) => void;
   saveSlideSource: (payload: { file: string; source: string }) => void;
   applyAiPatch: (payload: { target: string; content: string }) => void;
   rewriteSlide: (payload: { slideId: string; prompt: string }) => void;

@@ -12,7 +12,10 @@ type CodePreviewViewProps = {
   onTabChange: (tab: 'code' | 'preview') => void;
   onSelectSlide: (slideId: string) => void;
   onSourceChange: (file: string, source: string) => void;
+  onTitleChange: (title: string) => void;
+  onTitleBlur: () => void;
   onSave: () => void;
+  onBackHome: () => void;
 };
 
 export default function CodePreviewView({
@@ -23,7 +26,10 @@ export default function CodePreviewView({
   onTabChange,
   onSelectSlide,
   onSourceChange,
+  onTitleChange,
+  onTitleBlur,
   onSave,
+  onBackHome,
 }: CodePreviewViewProps) {
   const codeExtensions = useMemo(() => [javascript({ jsx: true, typescript: true })], []);
   const orderedSlides = useMemo(
@@ -42,8 +48,16 @@ export default function CodePreviewView({
       <div className="workspace-toolbar workspace-toolbar-floating">
         <div className="workspace-document-title">
           <span className="document-dot" />
-          <strong>{manifest.title}</strong>
-          <small>说课PPT</small>
+          <input
+            type="text"
+            className="course-title-input"
+            aria-label="course-title"
+            data-testid="course-title-input"
+            value={manifest.title}
+            onChange={(event) => onTitleChange(event.target.value)}
+            onBlur={onTitleBlur}
+          />
+          <small>说课 PPT</small>
         </div>
         <div className="workspace-tabs" role="tablist" aria-label="Editor tabs">
           <button type="button" className={tab === 'code' ? 'tab active' : 'tab'} onClick={() => onTabChange('code')}>
@@ -54,7 +68,10 @@ export default function CodePreviewView({
           </button>
         </div>
         <div className="workspace-toolbar-meta">
-          <button type="button" className="primary-button" onClick={onSave}>
+          <button type="button" className="secondary-button" aria-label="back-home" onClick={onBackHome}>
+            返回主页
+          </button>
+          <button type="button" className="primary-button" aria-label="save-course" onClick={onSave}>
             保存到本地
           </button>
         </div>
@@ -73,7 +90,7 @@ export default function CodePreviewView({
                 <div className="code-slide-header">
                   <span className="code-slide-index">{slide.pageIndex + 1} / {orderedSlides.length}</span>
                   <button type="button" className="mini-action">
-                    复制代码
+                    编辑页面
                   </button>
                 </div>
                 <div className="code-editor-shell">

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatSidebar from './components/ChatSidebar';
 import CodePreviewView from './components/CodePreviewView';
+import HomeScreen from './components/HomeScreen';
 import { getBridge } from './lib/bridge';
 import type { ChatAction, ChatMessage, CourseManifest, SlideSource } from './lib/types';
 
@@ -10,17 +11,59 @@ const emptyManifest: CourseManifest = {
   pages: [],
 };
 
+const newCourseSource = `export default function OpeningSlide() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-slate-950 p-14 text-white">
+      <section className="w-full max-w-5xl">
+        <p className="text-sm font-semibold uppercase tracking-wide text-cyan-200">New lesson</p>
+        <h1 className="mt-5 text-6xl font-black leading-tight">输入你的课件标题</h1>
+        <p className="mt-6 max-w-3xl text-xl leading-9 text-slate-200">
+          在这里写下本节课的核心问题、目标或导入活动。
+        </p>
+      </section>
+    </div>
+  );
+}
+`;
+
+const newCourseManifest: CourseManifest = {
+  id: 'new-course',
+  title: '未命名课件',
+  pages: [{ id: 'opening', title: '第一页', file: 'slides/OpeningSlide.tsx' }],
+};
+
+const newCourseSlides: SlideSource[] = [
+  {
+    file: 'slides/OpeningSlide.tsx',
+    title: '第一页',
+    source: newCourseSource,
+  },
+];
+
+const newCourseChat: ChatMessage[] = [
+  {
+    id: 'new-course-guide',
+    role: 'assistant',
+    content: '新课件已创建。先修改标题和导入语，再切到预览确认版式。',
+  },
+];
+
 export default function App() {
   const bridge = useMemo(() => getBridge(), []);
+  const [screen, setScreen] = useState<'home' | 'editor'>('home');
   const [manifest, setManifest] = useState<CourseManifest>(emptyManifest);
   const [slides, setSlides] = useState<SlideSource[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentSlideId, setCurrentSlideId] = useState('');
   const [currentTab, setCurrentTab] = useState<'code' | 'preview'>('preview');
+  const userCreatedCourseRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = bridge.onMessage((message) => {
       if (message.type === 'bootstrap') {
+        if (userCreatedCourseRef.current) {
+          return;
+        }
         setManifest(message.payload.manifest);
         setSlides(message.payload.slides);
         setMessages(message.payload.chat);
@@ -38,6 +81,14 @@ export default function App() {
 
   const updateSlideSource = (file: string, source: string) => {
     setSlides((previous) => previous.map((slide) => (slide.file === file ? { ...slide, source } : slide)));
+  };
+
+  const updateCourseTitle = (title: string) => {
+    setManifest((previous) => ({ ...previous, title }));
+  };
+
+  const normalizeCourseTitle = () => {
+    setManifest((previous) => ({ ...previous, title: previous.title.trim() || 'Untitled course' }));
   };
 
   const handleChatAction = (action: ChatAction) => {
@@ -83,11 +134,46 @@ export default function App() {
   };
 
   const handleSave = () => {
-    if (!currentSlide) {
+    if (!slides.length) {
       return;
     }
-    bridge.saveSlideSource({ file: currentSlide.file, source: currentSlide.source });
+    bridge.saveCourse({ manifest, slides });
   };
+
+  const openEditor = () => {
+    setCurrentSlideId((current) => current || manifest.pages[0]?.id || '');
+    setCurrentTab('preview');
+    setScreen('editor');
+  };
+
+  const handleCreateCourse = () => {
+    userCreatedCourseRef.current = true;
+    setManifest(newCourseManifest);
+    setSlides(newCourseSlides);
+    setMessages(newCourseChat);
+    setCurrentSlideId(newCourseManifest.pages[0]?.id ?? '');
+    setCurrentTab('code');
+    setScreen('editor');
+    bridge.createCourse({ source: newCourseSource });
+  };
+
+  const handleOpenCourse = () => {
+    userCreatedCourseRef.current = false;
+    bridge.openCourse();
+    openEditor();
+  };
+
+  if (screen === 'home') {
+    return (
+      <HomeScreen
+        hasLoadedCourse={slides.length > 0}
+        courseTitle={manifest.title}
+        onCreateCourse={handleCreateCourse}
+        onOpenCourse={handleOpenCourse}
+        onContinueCourse={openEditor}
+      />
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -105,7 +191,10 @@ export default function App() {
               onTabChange={setCurrentTab}
               onSelectSlide={setCurrentSlideId}
               onSourceChange={updateSlideSource}
+              onTitleChange={updateCourseTitle}
+              onTitleBlur={normalizeCourseTitle}
               onSave={handleSave}
+              onBackHome={() => setScreen('home')}
             />
           ) : (
             <section className="workspace-panel glass-panel empty-state">
