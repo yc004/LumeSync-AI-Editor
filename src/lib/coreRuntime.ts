@@ -28,7 +28,11 @@ type CoreRuntimeApi = {
   }) => Promise<CoreCourseData>;
   renderCourseExportDocument: (
     rootElement: HTMLElement,
-    props: { course?: { id?: string; title?: string }; courseData: CoreCourseData; contentScale?: number },
+    props: {
+      course?: { id?: string; title?: string; desc?: string; icon?: string; color?: string };
+      courseData: CoreCourseData;
+      contentScale?: number;
+    },
   ) => { unmount?: () => void };
 };
 

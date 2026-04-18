@@ -10,7 +10,7 @@ const titleFromSource = (source: string): string => {
   if (heading) {
     return heading;
   }
-  return source.match(/export default function\s+([A-Za-z0-9_]+)/)?.[1] ?? 'Untitled Slide';
+  return source.match(/export default function\s+([A-Za-z0-9_]+)/)?.[1] ?? '未命名页面';
 };
 
 const summaryFromSource = (source: string): string => {
@@ -18,21 +18,21 @@ const summaryFromSource = (source: string): string => {
   if (paragraph) {
     return paragraph;
   }
-  return '预览运行时将在后续阶段接入 teacher/core 的真实 TSX 编译与渲染能力。';
+  return '当前源码没有可提取的段落描述，预览区域会根据 TSX 结构生成一个简化的中文占位视图。';
 };
 
 export function renderSlideSource(source: string, context?: { title?: string }): React.ReactNode {
   if (!source.trim()) {
     return (
       <div className="preview-empty-state">
-        <h3>暂无页面源码</h3>
-        <p>选择一个幻灯片或通过 AI 协作区生成内容。</p>
+        <h3>当前页面没有源码</h3>
+        <p>先在源码视图中写入内容，或让 AI 生成初始页面，再回到这里查看预览。</p>
       </div>
     );
   }
 
   if (!/export\s+default\s+function/.test(source)) {
-    throw new Error('当前页面缺少 `export default function`，无法生成预览。');
+    throw new Error('当前页面源码缺少 `export default function`，无法生成占位预览。');
   }
 
   const heading = context?.title ?? titleFromSource(source);
@@ -43,21 +43,21 @@ export function renderSlideSource(source: string, context?: { title?: string }):
     <div className="mock-slide-frame">
       <div className="mock-slide-backdrop" />
       <div className="mock-slide-card">
-        <div className="mock-slide-chip">Mock Runtime Preview</div>
+        <div className="mock-slide-chip">运行时预览</div>
         <h1>{heading}</h1>
         <p>{summary}</p>
         <div className="mock-slide-stats">
           <div>
-            <span>Format</span>
+            <span>格式</span>
             <strong>.lume</strong>
           </div>
           <div>
-            <span>Layers</span>
+            <span>层级</span>
             <strong>{classNames.length}</strong>
           </div>
           <div>
-            <span>Status</span>
-            <strong>Ready</strong>
+            <span>状态</span>
+            <strong>就绪</strong>
           </div>
         </div>
         <div className="mock-slide-classlist">
