@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
+import tailwindRuntimeSource from '../../../teacher/shared/public/lib/tailwindcss.js?raw';
 import { ensureCoreRuntime } from '../lib/coreRuntime';
+import { normalizeRuntimeForCore } from '../lib/manifestRuntime';
+import { scheduleTeacherContentScale } from '../lib/teacherContentScale';
+import { getCourseRenderScale } from '../lib/renderScale';
 import type { CourseManifest, SlideSource } from '../lib/types';
 
 type RecentCourseSummary = {
@@ -19,6 +23,117 @@ type HomeScreenProps = {
   onDeleteRecentCourse: (courseId: string) => void;
 };
 
+const escapedTailwindRuntimeSource = tailwindRuntimeSource.replace(/<\/script/gi, '<\\/script');
+
+const writeHistoryFrameDocument = (iframe: HTMLIFrameElement) => {
+  const frameWindow = iframe.contentWindow;
+  const frameDocument = iframe.contentDocument;
+  if (!frameWindow || !frameDocument) {
+    throw new Error('History thumbnail iframe is not available.');
+  }
+
+  frameDocument.open();
+  frameDocument.write(`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  #history-root {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  .core-preview-mount {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1280px;
+    height: 720px;
+    transform: translate(-50%, -50%) scale(var(--history-thumb-scale, 1));
+    transform-origin: center center;
+  }
+
+  .core-preview-mount > div {
+    width: 1280px !important;
+    height: 720px !important;
+    min-height: 720px !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .core-preview-mount [data-export-page] {
+    width: 1280px !important;
+    max-width: none !important;
+    height: 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .core-preview-mount [data-export-page] > div {
+    width: 1280px !important;
+    height: 720px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+</style>
+<script>${escapedTailwindRuntimeSource}</script>
+<script>
+  tailwind.config = {
+    theme: {
+      screens: { sm: '10px', md: '10px', lg: '10px', xl: '10px', '2xl': '10px' },
+      extend: {
+        height: { screen: '100%' },
+        width: { screen: '100%' },
+        minHeight: { screen: '100%' },
+        minWidth: { screen: '100%' }
+      }
+    }
+  };
+</script>
+</head>
+<body>
+  <div id="history-root"><div id="core-preview-mount" class="core-preview-mount"></div></div>
+</body>
+</html>`);
+  frameDocument.close();
+
+  const mountElement = frameDocument.getElementById('core-preview-mount');
+  if (!mountElement) {
+    throw new Error('History thumbnail iframe mount element was not created.');
+  }
+
+  return { frameWindow, mountElement };
+};
+
+const updateHistoryFrameScale = (iframe: HTMLIFrameElement | null) => {
+  if (!iframe?.contentDocument) return;
+  const rect = iframe.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  iframe.contentDocument.documentElement.style.setProperty(
+    '--history-thumb-scale',
+    String(Math.min(rect.width / 1280, rect.height / 720)),
+  );
+};
+
 const formatTimestamp = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -36,96 +151,85 @@ const formatTimestamp = (value: string) => {
 };
 
 function RecentCourseCover({ course }: { course: RecentCourseSummary }) {
-  const mountRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const mountElement = mountRef.current;
-    if (!mountElement) {
-      return;
-    }
+    const frameElement = frameRef.current;
+    if (!frameElement) return;
 
-    const updateScale = () => {
-      const rect = mountElement.getBoundingClientRect();
-      if (!rect.width || !rect.height) {
-        return;
-      }
-      const nextScale = Math.min(rect.width / 1280, rect.height / 720);
-      mountElement.style.setProperty('--history-thumb-scale', String(nextScale));
-    };
-
+    const updateScale = () => updateHistoryFrameScale(frameElement);
     updateScale();
     const observer = new ResizeObserver(updateScale);
-    observer.observe(mountElement);
+    observer.observe(frameElement);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    const mountElement = mountRef.current;
-    if (!mountElement || !course.slides.length || !course.manifest.pages.length) {
-      return;
-    }
+    const frameElement = frameRef.current;
+    if (!frameElement || !course.slides.length || !course.manifest.pages.length) return;
 
     let cancelled = false;
     let renderedRoot: { unmount?: () => void } | undefined;
-    const renderElement = document.createElement('div');
-    renderElement.className = 'core-preview-mount';
 
     setFailed(false);
-    mountElement.replaceChildren(renderElement);
 
-    ensureCoreRuntime()
-      .then(async (runtime) => {
-        const firstPage = course.manifest.pages[0];
-        const firstSlide = course.slides.find((slide) => slide.file === firstPage?.file) ?? course.slides[0];
-        const previewManifest: CourseManifest = {
-          ...course.manifest,
-          pages: firstPage ? [firstPage] : course.manifest.pages.slice(0, 1),
-        };
-        const previewSlides = firstSlide ? [firstSlide] : [];
-        const courseData = await runtime.buildCourseDataFromMemory({
-          manifest: previewManifest,
-          slides: previewSlides,
-          course: {
-            id: course.manifest.id,
-            title: course.title,
-            desc: course.manifest.desc,
-            icon: course.manifest.icon,
-            color: course.manifest.color,
-          },
-        });
-        return { runtime, courseData };
-      })
-      .then(({ runtime, courseData }) => {
-        if (cancelled || !renderElement.isConnected) {
-          return;
-        }
+    try {
+      const { frameWindow, mountElement } = writeHistoryFrameDocument(frameElement);
+      updateHistoryFrameScale(frameElement);
 
-        renderedRoot = runtime.renderCourseExportDocument(renderElement, {
-          course: {
-            id: course.manifest.id,
-            title: course.title,
-            desc: course.manifest.desc,
-            icon: course.manifest.icon,
-            color: course.manifest.color,
-          },
-          courseData,
-          contentScale: 1,
+      ensureCoreRuntime(frameWindow)
+        .then(async (runtime) => {
+          const firstPage = course.manifest.pages[0];
+          const firstSlide = course.slides.find((slide) => slide.file === firstPage?.file) ?? course.slides[0];
+          const previewManifest = normalizeRuntimeForCore({
+            ...course.manifest,
+            pages: firstPage ? [firstPage] : course.manifest.pages.slice(0, 1),
+          });
+          const previewSlides = firstSlide ? [firstSlide] : [];
+          const courseData = await runtime.buildCourseDataFromMemory({
+            manifest: previewManifest,
+            slides: previewSlides,
+            course: {
+              id: course.manifest.id,
+              title: course.title,
+              desc: course.manifest.desc,
+              icon: course.manifest.icon,
+              color: course.manifest.color,
+            },
+          });
+          return { runtime, courseData };
+        })
+        .then(({ runtime, courseData }) => {
+          if (cancelled || !mountElement.isConnected) return;
+
+          renderedRoot = runtime.renderCourseExportDocument(mountElement, {
+            course: {
+              id: course.manifest.id,
+              title: course.title,
+              desc: course.manifest.desc,
+              icon: course.manifest.icon,
+              color: course.manifest.color,
+            },
+            courseData,
+            contentScale: 1,
+          });
+
+          const contentScale = getCourseRenderScale(course.manifest);
+          scheduleTeacherContentScale(frameWindow, mountElement, contentScale, () => cancelled);
+        })
+        .catch((error) => {
+          console.error('[ai-editor] history thumbnail render failed:', error);
+          if (!cancelled) setFailed(true);
         });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
+    } catch (error) {
+      console.error('[ai-editor] history thumbnail iframe failed:', error);
+      setFailed(true);
+    }
 
     return () => {
       cancelled = true;
-      const rootToUnmount = renderedRoot;
-      window.setTimeout(() => {
-        rootToUnmount?.unmount?.();
-        renderElement.remove();
-      }, 0);
+      renderedRoot?.unmount?.();
     };
   }, [course]);
 
@@ -138,7 +242,7 @@ function RecentCourseCover({ course }: { course: RecentCourseSummary }) {
     );
   }
 
-  return <div ref={mountRef} className="history-thumb-runtime" />;
+  return <iframe ref={frameRef} className="history-thumb-frame" title={`最近课件封面: ${course.title}`} />;
 }
 
 export default function HomeScreen({
@@ -158,7 +262,7 @@ export default function HomeScreen({
         </button>
         <span className="home-toolbar-divider" />
         <button type="button" className="home-toolbar-icon icon-only" aria-label="切换主题">
-          光
+          亮
         </button>
         <span className="home-toolbar-divider" />
         <button type="button" className="home-toolbar-icon icon-only" aria-label="打开设置">
@@ -194,7 +298,7 @@ export default function HomeScreen({
                 <strong>先写下这节课想讲什么，再进入编辑器把页面、讲稿和舞台效果展开。</strong>
               </div>
               <button type="button" className="openmaic-home-greeting-toggle" aria-label="展开个人信息">
-                ∨
+                v
               </button>
             </div>
             <div className="openmaic-home-agentbar">
@@ -208,7 +312,7 @@ export default function HomeScreen({
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="输入你的课件需求，例如：为高中人工智能导论设计一节 3 页的课堂课件，第一页介绍大模型概念，第二页讲提示词工程，第三页安排课堂练习。"
+              placeholder="输入你的课件需求，例如：为高中人工智能导论设计 3 页课堂课件，第一页介绍大模型概念，第二页讲提示词工程，第三页安排课堂练习。"
               aria-label="课件需求输入框"
               rows={5}
             />
@@ -286,7 +390,7 @@ export default function HomeScreen({
                         onDeleteRecentCourse(course.id);
                       }}
                     >
-                      ×
+                      x
                     </button>
                   </span>
                 </div>
@@ -307,3 +411,10 @@ export default function HomeScreen({
     </main>
   );
 }
+
+
+
+
+
+
+

@@ -2,7 +2,6 @@
 import { editCourseWithAi, testAiConnection } from './ai/openai';
 import ChatSidebar from './components/ChatSidebar';
 import CodePreviewView from './components/CodePreviewView';
-import CourseConfigDialog from './components/CourseConfigDialog';
 import HomeScreen from './components/HomeScreen';
 import SceneSidebar from './components/SceneSidebar';
 import SettingsDialog from './components/SettingsDialog';
@@ -32,10 +31,27 @@ const newCourseSource = `export default function OpeningSlide() {
   return (
     <div className="flex h-full w-full items-center justify-center bg-slate-950 p-14 text-white">
       <section className="w-full max-w-5xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-200">新课开始</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-cyan-200">新课开始</p>
         <h1 className="mt-5 text-6xl font-black leading-tight">设计下一页 AI 课堂场景。</h1>
         <p className="mt-6 max-w-3xl text-xl leading-9 text-slate-200">
           先写下教学目标，再用编辑器生成讲义、舞台画面和课堂页面逻辑，逐步完善整节课的中文表达。
+        </p>
+      </section>
+    </div>
+  );
+}
+`;
+
+const createManualSlideSource = (title: string) => `export default function ManualSlide() {
+  const title = ${JSON.stringify(title.trim() || '新页面')};
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-slate-950 p-14 text-white">
+      <section className="w-full max-w-4xl rounded-2xl border border-white/10 bg-white/5 p-12">
+        <p className="text-sm font-semibold uppercase tracking-widest text-cyan-200">LumeSync</p>
+        <h1 className="mt-5 text-5xl font-black leading-tight">{title}</h1>
+        <p className="mt-6 text-xl leading-9 text-slate-200">
+          在这里补充这一页的教学内容、课堂互动和讲解节奏。
         </p>
       </section>
     </div>
@@ -120,7 +136,7 @@ export default function App() {
   const [recentCourses, setRecentCourses] = useState<RecentCourseEntry[]>(() => loadRecentCourses());
   const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<'config' | 'chat'>('config');
   const [aiBusy, setAiBusy] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -325,20 +341,33 @@ export default function App() {
   };
 
   const handleSaveCourseConfig = (nextManifest: CourseManifest) => {
+    const previousPagesById = new Map(manifest.pages.map((page) => [page.id, page]));
+
     setManifest(nextManifest);
-    setSlides((previous) =>
-      previous.map((slide) => {
-        const page = nextManifest.pages.find((item) => item.file === slide.file);
-        return page ? { ...slide, title: page.title } : slide;
-      }),
-    );
+    setSlides((previous) => {
+      const previousSlidesByFile = new Map(previous.map((slide) => [slide.file, slide]));
+
+      return nextManifest.pages.map((page) => {
+        const previousPage = previousPagesById.get(page.id);
+        const existingSlide = previousSlidesByFile.get(page.file) ?? (previousPage ? previousSlidesByFile.get(previousPage.file) : undefined);
+
+        if (existingSlide) {
+          return { ...existingSlide, file: page.file, title: page.title };
+        }
+
+        return {
+          file: page.file,
+          title: page.title,
+          source: createManualSlideSource(page.title),
+        };
+      });
+    });
     setCurrentSlideId((current) => {
       if (nextManifest.pages.some((page) => page.id === current)) {
         return current;
       }
       return nextManifest.pages[0]?.id ?? '';
     });
-    setConfigOpen(false);
   };
 
   const handleCreateCourse = () => {
@@ -353,6 +382,7 @@ export default function App() {
         slideModule: 'tsx',
         entryMode: 'pages',
         preferredAspectRatio: '16:9',
+        renderScale: 1,
       },
       pages: [{ id: 'opening', title: '开场页', file: 'slides/OpeningSlide.tsx' }],
     };
@@ -440,7 +470,6 @@ export default function App() {
         onSave={saveAiSettings}
         onTestConnection={testAiConnection}
       />
-      <CourseConfigDialog open={configOpen} manifest={manifest} onClose={() => setConfigOpen(false)} onSave={handleSaveCourseConfig} />
       <main className="app-shell openmaic-shell">
         <section className="editor-grid openmaic-editor-grid">
           <SceneSidebar
@@ -474,7 +503,10 @@ export default function App() {
                 onTitleBlur={normalizeCourseTitle}
                 onPageTitleChange={updatePageTitle}
                 onPageTitleBlur={normalizeCurrentPageTitle}
-                onOpenConfig={() => setConfigOpen(true)}
+                onOpenConfig={() => {
+                  setChatCollapsed(false);
+                  setRightPanelTab('config');
+                }}
                 onSave={handleSave}
                 onBackHome={() => setScreen('home')}
               />
@@ -492,10 +524,13 @@ export default function App() {
             onAction={handleChatAction}
             onSubmit={handleSubmit}
             onOpenSettings={() => setSettingsOpen(true)}
+            onSaveCourseConfig={handleSaveCourseConfig}
             aiSettings={aiSettings}
             aiBusy={aiBusy}
             collapsed={chatCollapsed}
             width={chatWidth}
+            activeTab={rightPanelTab}
+            onTabChange={setRightPanelTab}
             onWidthChange={setChatWidth}
             onCollapseChange={setChatCollapsed}
           />
@@ -504,3 +539,9 @@ export default function App() {
     </>
   );
 }
+
+
+
+
+
+

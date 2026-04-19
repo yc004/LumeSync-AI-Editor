@@ -1,8 +1,11 @@
-import { marked } from 'marked';
+﻿import { marked } from 'marked';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import CourseConfigPanel from './CourseConfigPanel';
 import type { AiSettings, ChatAction, ChatMessage, CourseManifest } from '../lib/types';
 
 marked.setOptions({ breaks: true });
+
+type RightPanelTab = 'config' | 'chat';
 
 type ChatSidebarProps = {
   manifest: CourseManifest;
@@ -10,16 +13,19 @@ type ChatSidebarProps = {
   onAction: (action: ChatAction) => void;
   onSubmit: (content: string) => void;
   onOpenSettings: () => void;
+  onSaveCourseConfig: (manifest: CourseManifest) => void;
   aiSettings: AiSettings;
   aiBusy: boolean;
   collapsed: boolean;
   width: number;
+  activeTab: RightPanelTab;
+  onTabChange: (tab: RightPanelTab) => void;
   onWidthChange: (width: number) => void;
   onCollapseChange: (collapsed: boolean) => void;
 };
 
-const MIN_WIDTH = 240;
-const MAX_WIDTH = 560;
+const MIN_WIDTH = 300;
+const MAX_WIDTH = 640;
 
 export default function ChatSidebar({
   manifest,
@@ -27,15 +33,17 @@ export default function ChatSidebar({
   onAction,
   onSubmit,
   onOpenSettings,
+  onSaveCourseConfig,
   aiSettings,
   aiBusy,
   collapsed,
   width,
+  activeTab,
+  onTabChange,
   onWidthChange,
   onCollapseChange,
 }: ChatSidebarProps) {
   const [draft, setDraft] = useState('');
-  const [activeTab, setActiveTab] = useState<'lecture' | 'chat'>('lecture');
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const renderedMessages = useMemo(
@@ -49,24 +57,18 @@ export default function ChatSidebar({
 
   const submitDraft = (value: string) => {
     const next = value.trim();
-    if (!next) {
-      return;
-    }
+    if (!next) return;
 
     onSubmit(next);
     setDraft('');
-    setActiveTab('chat');
+    onTabChange('chat');
   };
 
   useEffect(() => {
-    if (activeTab !== 'chat') {
-      return;
-    }
+    if (activeTab !== 'chat') return;
 
     const scrollElement = chatScrollRef.current;
-    if (!scrollElement) {
-      return;
-    }
+    if (!scrollElement) return;
 
     scrollElement.scrollTop = scrollElement.scrollHeight;
   }, [activeTab, renderedMessages]);
@@ -105,14 +107,10 @@ export default function ChatSidebar({
           <div className="chat-sidebar-inner">
             <div className="chat-sidebar-topbar">
               <div className="chat-tab-switcher" role="tablist" aria-label="右侧栏视图">
-                <button
-                  type="button"
-                  className={activeTab === 'lecture' ? 'chat-tab active' : 'chat-tab'}
-                  onClick={() => setActiveTab('lecture')}
-                >
-                  课件
+                <button type="button" className={activeTab === 'config' ? 'chat-tab active' : 'chat-tab'} onClick={() => onTabChange('config')}>
+                  课件基础配置
                 </button>
-                <button type="button" className={activeTab === 'chat' ? 'chat-tab active' : 'chat-tab'} onClick={() => setActiveTab('chat')}>
+                <button type="button" className={activeTab === 'chat' ? 'chat-tab active' : 'chat-tab'} onClick={() => onTabChange('chat')}>
                   AI
                 </button>
               </div>
@@ -122,30 +120,14 @@ export default function ChatSidebar({
                   收起
                 </button>
                 <button type="button" className="chat-ghost-button" onClick={onOpenSettings}>
-                  设置
+                  AI 配置
                 </button>
               </div>
             </div>
 
-            {activeTab === 'lecture' ? (
-              <div className="lecture-notes-panel custom-scrollbar">
-                <div className="lecture-notes-header">
-                  <p className="lecture-notes-eyebrow">当前课件</p>
-                  <h2>{manifest.title}</h2>
-                </div>
-
-                <div className="lecture-note-list">
-                  {manifest.pages.map((page, index) => (
-                    <article key={page.id} className={index === 0 ? 'lecture-note-card current' : 'lecture-note-card'}>
-                      <div className="lecture-note-head">
-                        <div className="lecture-note-order">第 {index + 1} 页</div>
-                        {index === 0 ? <span className="lecture-note-current">首页</span> : null}
-                      </div>
-                      <strong>{page.title}</strong>
-                      <p>{page.file}</p>
-                    </article>
-                  ))}
-                </div>
+            {activeTab === 'config' ? (
+              <div className="course-config-tab-panel custom-scrollbar">
+                <CourseConfigPanel manifest={manifest} onSave={onSaveCourseConfig} compact />
               </div>
             ) : (
               <>
@@ -173,11 +155,7 @@ export default function ChatSidebar({
                             {message.actions?.length ? (
                               <div className="chat-actions">
                                 {message.actions.map((action) => (
-                                  <button
-                                    key={`${message.id}-${action.id}-${action.targetSlideId ?? 'self'}`}
-                                    type="button"
-                                    onClick={() => onAction(action)}
-                                  >
+                                  <button key={`${message.id}-${action.id}-${action.targetSlideId ?? 'self'}`} type="button" onClick={() => onAction(action)}>
                                     {action.label}
                                   </button>
                                 ))}

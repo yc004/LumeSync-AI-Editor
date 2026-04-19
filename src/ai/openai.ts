@@ -304,7 +304,7 @@ const normalizeCourseEditResult = (raw: unknown, fallback: CourseEditInput): Cou
 };
 
 export async function editCourseWithAi(input: CourseEditInput): Promise<CourseEditResult> {
-  const content = await callStreamingChatCompletions(input.settings, [
+  const response = await callStreamingChatCompletions(input.settings, [
     {
       role: 'system',
       content: courseEditorSystemPrompt,
@@ -320,11 +320,11 @@ export async function editCourseWithAi(input: CourseEditInput): Promise<CourseEd
         JSON.stringify(input.slides, null, 2),
       ].join('\n\n'),
     },
-  ], input.onDelta);
+  ], { onDelta: input.onDelta });
 
-  if (!content?.trim()) {
+  if (!response.finalJson && !response.text.trim()) {
     throw new Error('AI 返回了空的课件编辑结果。');
   }
 
-  return normalizeCourseEditResult(parseJsonResponse(content), input);
+  return normalizeCourseEditResult(response.finalJson ?? parseJsonResponse(response.text), input);
 }

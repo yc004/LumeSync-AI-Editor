@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -23,6 +23,7 @@
 html,
 body,
 #root {
+  width: 100%;
   height: 100%;
   margin: 0;
   overflow: hidden;
@@ -74,11 +75,13 @@ textarea {
 }
 
 #root {
-  position: relative;
+  position: fixed;
+  inset: 0;
 }
 
 .app-shell {
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -751,11 +754,12 @@ textarea {
 }
 
 .history-thumb-frame {
+  width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 0.75rem;
+  display: block;
+  border: 0;
+  pointer-events: none;
+  background: #0f172a;
 }
 
 .history-thumb-toolbar {
@@ -834,7 +838,7 @@ textarea {
 .openmaic-editor-grid {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  height: 100vh;
+  height: 100%;
   background: linear-gradient(180deg, #f8fafc, #f1f5f9);
 }
 
@@ -1032,6 +1036,13 @@ textarea {
   background: linear-gradient(135deg, #f5f3ff, #faf5ff);
 }
 
+.scene-thumb-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0f172a;
+}
 .scene-thumb-runtime {
   position: relative;
   width: 100%;
@@ -1462,6 +1473,13 @@ textarea {
     inset 0 0 0 1px rgba(167, 139, 250, 0.18);
 }
 
+.preview-page-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0f172a;
+}
 .preview-page-runtime {
   position: relative;
   width: 100%;
@@ -2526,4 +2544,76 @@ textarea {
     aspect-ratio: auto;
     min-height: 560px;
   }
+}
+
+
+.course-config-tab-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.course-config-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.course-config-panel-body.compact .course-config-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+}
+
+.course-config-panel-body.compact .course-config-grid,
+.course-config-panel-body.compact .course-config-asset-row,
+.course-config-panel-body.compact .course-config-dependency-row,
+.course-config-panel-body.compact .course-config-page-fields {
+  grid-template-columns: 1fr;
+}
+
+.course-config-panel-body.compact .course-config-page-card {
+  grid-template-columns: 1fr;
+}
+
+.course-config-panel-body.compact .course-config-remove-button {
+  justify-self: flex-start;
+}
+
+.course-config-subtabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 10px 12px 0;
+}
+
+.course-config-subtabs button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 0.42rem 0.58rem;
+}
+
+.course-config-subtabs button.active {
+  border-color: rgba(139, 71, 234, 0.35);
+  background: rgba(139, 71, 234, 0.12);
+  color: #7c3aed;
+}
+
+.course-config-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(226, 232, 240, 0.78);
+  padding: 12px;
+}
+
+.course-config-panel-body:not(.compact) .course-config-panel-actions {
+  padding: 14px 22px 20px;
 }

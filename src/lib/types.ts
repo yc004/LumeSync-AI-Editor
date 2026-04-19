@@ -1,4 +1,4 @@
-export type JsonPrimitive = string | number | boolean | null;
+﻿export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type CourseManifest = {
@@ -34,6 +34,8 @@ export type CourseManifest = {
     react?: string;
     slideModule?: string;
     preferredAspectRatio?: string;
+    renderScale?: number;
+    uiScale?: number;
     [key: string]: JsonValue | undefined;
   };
   pages: Array<{
@@ -123,3 +125,4 @@ export type SyncState = {
   status: 'idle' | 'saving' | 'saved' | 'error';
   detail: string;
 };
+

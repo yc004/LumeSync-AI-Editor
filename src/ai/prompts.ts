@@ -1,5 +1,14 @@
 import createCourseSkill from './skills/create-course/SKILL.md?raw';
 
+const teacherRuntimeCompatibility = `
+教师端兼容性规则：
+- 教师端是最终显示标准；不要为了编辑器预览效果使用教师端可能无法稳定生成的 Tailwind 任意值语法。
+- 页面 TSX 不要使用包含方括号的 Tailwind class，例如 rounded-[2rem]、grid-cols-[1.2fr_0.8fr]、bg-[#03111c]、bg-[linear-gradient(...)]、shadow-[...]、tracking-[...]、text-[...]。
+- 需要自定义颜色、渐变、圆角、阴影、网格列宽或字距时，使用 React inline style，例如 style={{ background: '#03111c', borderRadius: 32 }}。
+- className 只使用教师端常规 Tailwind utility，例如 flex、grid、h-full、w-full、p-12、gap-6、text-white、text-5xl、font-bold、rounded-3xl、bg-slate-950、border-white/10。
+- 生成后优先检查：导出 .lume 到教师端时应与编辑器预览一致，不依赖编辑器自己的全局 CSS。
+`.trim();
+
 const courseEditorContract = `
 你是 LumeSync AI 课件编辑器的完整课件编辑智能体。
 
@@ -37,4 +46,4 @@ const courseEditorContract = `
 - tab 只能是 "preview" 或 "code"；完成视觉编辑后优先返回 "preview"。
 `.trim();
 
-export const courseEditorSystemPrompt = [courseEditorContract, createCourseSkill].join('\n\n');
+export const courseEditorSystemPrompt = [courseEditorContract, teacherRuntimeCompatibility, createCourseSkill].join('\n\n');

@@ -1,7 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ensureCoreRuntime } from '../lib/coreRuntime';
-import { createAssetUrlMap, rewriteSlideAssetReferences } from '../lib/assetPreview';
-import type { CourseAssetSource, CourseManifest, SlideSource } from '../lib/types';
+﻿import { useEffect, useMemo, useRef, useState } from "react";
+import tailwindRuntimeSource from "../../../teacher/shared/public/lib/tailwindcss.js?raw";
+import {
+  createAssetUrlMap,
+  rewriteSlideAssetReferences,
+} from "../lib/assetPreview";
+import { ensureCoreRuntime } from "../lib/coreRuntime";
+import { normalizeRuntimeForCore } from "../lib/manifestRuntime";
+import { scheduleTeacherContentScale } from '../lib/teacherContentScale';
+import { getCourseRenderScale } from "../lib/renderScale";
+import type {
+  CourseAssetSource,
+  CourseManifest,
+  SlideSource,
+} from "../lib/types";
 
 type PreviewStageProps = {
   manifest: CourseManifest;
@@ -18,7 +29,7 @@ type OrderedSlide = SlideSource & {
 
 type PreviewPageCardProps = {
   manifest: CourseManifest;
-  page: CourseManifest['pages'][number];
+  page: CourseManifest["pages"][number];
   slide?: OrderedSlide;
   assets?: CourseAssetSource[];
   index: number;
@@ -27,115 +38,243 @@ type PreviewPageCardProps = {
   onSelectSlide: (slideId: string) => void;
 };
 
-function PreviewPageCard({ manifest, page, slide, assets = [], index, total, isActive, onSelectSlide }: PreviewPageCardProps) {
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState('');
+const escapedTailwindRuntimeSource = tailwindRuntimeSource.replace(
+  /<\/script/gi,
+  "<\\/script",
+);
+
+const writePreviewFrameDocument = (iframe: HTMLIFrameElement) => {
+  const frameWindow = iframe.contentWindow;
+  const frameDocument = iframe.contentDocument;
+  if (!frameWindow || !frameDocument) {
+    throw new Error("Preview iframe is not available.");
+  }
+
+  frameDocument.open();
+  frameDocument.write(`<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  #preview-root {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  .core-preview-mount {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1280px;
+    height: 720px;
+    transform: translate(-50%, -50%) scale(var(--preview-page-scale, 1));
+    transform-origin: center center;
+  }
+
+  .core-preview-mount > div {
+    width: 1280px !important;
+    height: 720px !important;
+    min-height: 720px !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .core-preview-mount [data-export-page] {
+    width: 1280px !important;
+    max-width: none !important;
+    height: 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .core-preview-mount [data-export-page] > div {
+    width: 1280px !important;
+    height: 720px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+</style>
+<script>${escapedTailwindRuntimeSource}</script>
+<script>
+  tailwind.config = {
+    theme: {
+      screens: { sm: '10px', md: '10px', lg: '10px', xl: '10px', '2xl': '10px' },
+      extend: {
+        height: { screen: '100%' },
+        width: { screen: '100%' },
+        minHeight: { screen: '100%' },
+        minWidth: { screen: '100%' }
+      }
+    }
+  };
+</script>
+</head>
+<body>
+  <div id="preview-root"><div id="core-preview-mount" class="core-preview-mount"></div></div>
+</body>
+</html>`);
+  frameDocument.close();
+
+  const mountElement = frameDocument.getElementById("core-preview-mount");
+  if (!mountElement) {
+    throw new Error("Preview iframe mount element was not created.");
+  }
+
+  return { frameWindow, frameDocument, mountElement };
+};
+
+const updatePreviewFrameScale = (iframe: HTMLIFrameElement | null) => {
+  if (!iframe?.contentDocument) return;
+  const rect = iframe.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  iframe.contentDocument.documentElement.style.setProperty(
+    "--preview-page-scale",
+    String(Math.min(rect.width / 1280, rect.height / 720)),
+  );
+};
+
+function PreviewPageCard({
+  manifest,
+  page,
+  slide,
+  assets = [],
+  index,
+  total,
+  isActive,
+  onSelectSlide,
+}: PreviewPageCardProps) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const mountElement = mountRef.current;
-    if (!mountElement) {
-      return;
-    }
+    const frameElement = frameRef.current;
+    if (!frameElement) return;
 
-    const updateScale = () => {
-      const rect = mountElement.getBoundingClientRect();
-      if (!rect.width || !rect.height) {
-        return;
-      }
-      mountElement.style.setProperty('--preview-page-scale', String(Math.min(rect.width / 1280, rect.height / 720)));
-    };
-
+    const updateScale = () => updatePreviewFrameScale(frameElement);
     updateScale();
     const observer = new ResizeObserver(updateScale);
-    observer.observe(mountElement);
+    observer.observe(frameElement);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    const mountElement = mountRef.current;
-    if (!mountElement || !slide) {
-      setState('error');
-      setError('找不到这一页对应的课件源码。');
+    const frameElement = frameRef.current;
+    if (!frameElement || !slide) {
+      setState("error");
+      setError("Slide source was not found.");
       return;
     }
 
     let cancelled = false;
     let renderedRoot: { unmount?: () => void } | undefined;
-    const renderElement = document.createElement('div');
-    renderElement.className = 'core-preview-mount';
-
-    setState('loading');
-    setError('');
-    mountElement.replaceChildren(renderElement);
     const assetUrlMap = createAssetUrlMap(assets);
-    const previewSlide = rewriteSlideAssetReferences(slide, assetUrlMap.urls);
 
-    ensureCoreRuntime()
-      .then(async (runtime) => {
-        const previewManifest: CourseManifest = {
-          ...manifest,
-          pages: [page],
-        };
-        const courseData = await runtime.buildCourseDataFromMemory({
-          manifest: previewManifest,
-          slides: [previewSlide],
-          course: {
-            id: manifest.id,
-            title: manifest.title,
-            desc: manifest.desc,
-            icon: manifest.icon,
-            color: manifest.color,
-          },
+    setState("loading");
+    setError("");
+
+    try {
+      const { frameWindow, frameDocument, mountElement } =
+        writePreviewFrameDocument(frameElement);
+      updatePreviewFrameScale(frameElement);
+      const previewSlide = rewriteSlideAssetReferences(slide, assetUrlMap.urls);
+
+      ensureCoreRuntime(frameWindow)
+        .then(async (runtime) => {
+          const previewManifest = normalizeRuntimeForCore({
+            ...manifest,
+            pages: [page],
+          });
+          const courseData = await runtime.buildCourseDataFromMemory({
+            manifest: previewManifest,
+            slides: [previewSlide],
+            course: {
+              id: manifest.id,
+              title: manifest.title,
+              desc: manifest.desc,
+              icon: manifest.icon,
+              color: manifest.color,
+            },
+          });
+          return { runtime, courseData };
+        })
+        .then(({ runtime, courseData }) => {
+          if (cancelled || !mountElement.isConnected) return;
+
+          renderedRoot = runtime.renderCourseExportDocument(mountElement, {
+            course: {
+              id: manifest.id,
+              title: manifest.title,
+              desc: manifest.desc,
+              icon: manifest.icon,
+              color: manifest.color,
+            },
+            courseData,
+            contentScale: 1,
+          });
+
+          const contentScale = getCourseRenderScale(manifest);
+          scheduleTeacherContentScale(frameWindow, mountElement, contentScale, () => cancelled);
+
+          window.setTimeout(() => {
+            if (!cancelled) setState("ready");
+          }, 80);
+        })
+        .catch((renderError: unknown) => {
+          if (cancelled) return;
+          console.error("[ai-editor] page preview render failed:", renderError);
+          setState("error");
+          setError(
+            renderError instanceof Error
+              ? renderError.message
+              : "Preview sandbox failed to initialize.",
+          );
         });
-        return { runtime, courseData };
-      })
-      .then(({ runtime, courseData }) => {
-        if (cancelled || !renderElement.isConnected) {
-          return;
-        }
 
-        renderedRoot = runtime.renderCourseExportDocument(renderElement, {
-          course: {
-            id: manifest.id,
-            title: manifest.title,
-            desc: manifest.desc,
-            icon: manifest.icon,
-            color: manifest.color,
-          },
-          courseData,
-          contentScale: 1,
-        });
-        setState('ready');
-      })
-      .catch((renderError: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        console.error('[ai-editor] page preview render failed:', renderError);
-        setState('error');
-        setError(renderError instanceof Error ? renderError.message : '这一页暂时无法预览。');
-      });
-
-    return () => {
-      cancelled = true;
-      const rootToUnmount = renderedRoot;
-      window.setTimeout(() => {
-        rootToUnmount?.unmount?.();
-        renderElement.remove();
+      return () => {
+        cancelled = true;
+        renderedRoot?.unmount?.();
         assetUrlMap.revoke();
-      }, 0);
-    };
+      };
+    } catch (renderError) {
+      assetUrlMap.revoke();
+      console.error("[ai-editor] page preview iframe failed:", renderError);
+      setState("error");
+      setError(
+        renderError instanceof Error
+          ? renderError.message
+          : "Preview sandbox failed to initialize.",
+      );
+    }
   }, [assets, manifest, page, slide]);
 
   return (
     <section
-      className={isActive ? 'preview-page-card active' : 'preview-page-card'}
+      className={isActive ? "preview-page-card active" : "preview-page-card"}
       data-page-id={page.id}
       data-testid={`preview-page-${page.id}`}
       onClick={() => onSelectSlide(page.id)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onSelectSlide(page.id);
         }
@@ -144,16 +283,20 @@ function PreviewPageCard({ manifest, page, slide, assets = [], index, total, isA
       tabIndex={0}
       aria-label={`预览页面 ${index + 1} / ${total}：${page.title}`}
     >
-      <div ref={mountRef} className="preview-page-runtime" />
+      <iframe
+        ref={frameRef}
+        className="preview-page-frame"
+        title={`预览页面 ${index + 1}: ${page.title}`}
+      />
       <div className="preview-page-overlay-layer">
-        {state === 'loading' ? (
+        {state === "loading" ? (
           <div className="preview-page-overlay">
-            <strong>正在渲染页面</strong>
+            <strong>Rendering page</strong>
           </div>
         ) : null}
-        {state === 'error' ? (
+        {state === "error" ? (
           <div className="preview-page-overlay error">
-            <strong>预览不可用</strong>
+            <strong>Preview unavailable</strong>
             <span>{error}</span>
           </div>
         ) : null}
@@ -162,7 +305,13 @@ function PreviewPageCard({ manifest, page, slide, assets = [], index, total, isA
   );
 }
 
-export default function PreviewStage({ manifest, slides, assets = [], currentSlideId, onSelectSlide }: PreviewStageProps) {
+export default function PreviewStage({
+  manifest,
+  slides,
+  assets = [],
+  currentSlideId,
+  onSelectSlide,
+}: PreviewStageProps) {
   const previewDocumentRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<number | undefined>(undefined);
   const autoScrollingRef = useRef(false);
@@ -188,14 +337,12 @@ export default function PreviewStage({ manifest, slides, assets = [], currentSli
 
   useEffect(() => {
     const previewDocument = previewDocumentRef.current;
-    if (!previewDocument || !currentSlideId) {
-      return;
-    }
+    if (!previewDocument || !currentSlideId) return;
 
-    const activePage = previewDocument.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(currentSlideId)}"]`);
-    if (!activePage) {
-      return;
-    }
+    const activePage = previewDocument.querySelector<HTMLElement>(
+      `[data-page-id="${CSS.escape(currentSlideId)}"]`,
+    );
+    if (!activePage) return;
 
     const documentRect = previewDocument.getBoundingClientRect();
     const pageRect = activePage.getBoundingClientRect();
@@ -203,46 +350,52 @@ export default function PreviewStage({ manifest, slides, assets = [], currentSli
       pageRect.bottom > documentRect.top + documentRect.height * 0.25 &&
       pageRect.top < documentRect.bottom - documentRect.height * 0.25;
 
-    if (coversViewportFocus) {
-      return;
-    }
+    if (coversViewportFocus) return;
 
     autoScrollingRef.current = true;
     if (autoScrollTimeoutRef.current !== undefined) {
       window.clearTimeout(autoScrollTimeoutRef.current);
     }
-    const scrollBehavior: ScrollBehavior = hasPositionedRef.current ? 'smooth' : 'auto';
-    activePage?.scrollIntoView({
+    const scrollBehavior: ScrollBehavior = hasPositionedRef.current
+      ? "smooth"
+      : "auto";
+    activePage.scrollIntoView({
       behavior: scrollBehavior,
-      block: 'start',
-      inline: 'nearest',
+      block: "start",
+      inline: "nearest",
     });
     hasPositionedRef.current = true;
-    autoScrollTimeoutRef.current = window.setTimeout(() => {
-      autoScrollingRef.current = false;
-      autoScrollTimeoutRef.current = undefined;
-    }, scrollBehavior === 'smooth' ? 520 : 80);
+    autoScrollTimeoutRef.current = window.setTimeout(
+      () => {
+        autoScrollingRef.current = false;
+        autoScrollTimeoutRef.current = undefined;
+      },
+      scrollBehavior === "smooth" ? 520 : 80,
+    );
   }, [currentSlideId]);
 
   useEffect(() => {
     const previewDocument = previewDocumentRef.current;
-    if (!previewDocument) {
-      return;
-    }
+    if (!previewDocument) return;
 
     const syncCurrentPageFromScroll = () => {
-      const pages = Array.from(previewDocument.querySelectorAll<HTMLElement>('[data-page-id]'));
-      if (!pages.length) {
-        return;
-      }
+      const pages = Array.from(
+        previewDocument.querySelectorAll<HTMLElement>("[data-page-id]"),
+      );
+      if (!pages.length) return;
 
-      const viewportCenter = previewDocument.getBoundingClientRect().top + previewDocument.clientHeight / 2;
-      const closestPage = pages.reduce((closest, page) => {
-        const pageRect = page.getBoundingClientRect();
-        const pageCenter = pageRect.top + pageRect.height / 2;
-        const distance = Math.abs(pageCenter - viewportCenter);
-        return distance < closest.distance ? { page, distance } : closest;
-      }, { page: pages[0], distance: Number.POSITIVE_INFINITY });
+      const viewportCenter =
+        previewDocument.getBoundingClientRect().top +
+        previewDocument.clientHeight / 2;
+      const closestPage = pages.reduce(
+        (closest, page) => {
+          const pageRect = page.getBoundingClientRect();
+          const pageCenter = pageRect.top + pageRect.height / 2;
+          const distance = Math.abs(pageCenter - viewportCenter);
+          return distance < closest.distance ? { page, distance } : closest;
+        },
+        { page: pages[0], distance: Number.POSITIVE_INFINITY },
+      );
 
       const pageId = closestPage.page.dataset.pageId;
       if (pageId && pageId !== currentSlideId) {
@@ -251,19 +404,19 @@ export default function PreviewStage({ manifest, slides, assets = [], currentSli
     };
 
     const handleScroll = () => {
-      if (autoScrollingRef.current) {
-        return;
-      }
+      if (autoScrollingRef.current) return;
 
       if (frameRef.current !== undefined) {
         window.cancelAnimationFrame(frameRef.current);
       }
-      frameRef.current = window.requestAnimationFrame(syncCurrentPageFromScroll);
+      frameRef.current = window.requestAnimationFrame(
+        syncCurrentPageFromScroll,
+      );
     };
 
-    previewDocument.addEventListener('scroll', handleScroll, { passive: true });
+    previewDocument.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      previewDocument.removeEventListener('scroll', handleScroll);
+      previewDocument.removeEventListener("scroll", handleScroll);
       if (frameRef.current !== undefined) {
         window.cancelAnimationFrame(frameRef.current);
         frameRef.current = undefined;
@@ -276,7 +429,11 @@ export default function PreviewStage({ manifest, slides, assets = [], currentSli
   }, [currentSlideId, onSelectSlide]);
 
   return (
-    <div ref={previewDocumentRef} className="preview-shell custom-scrollbar" data-testid="preview-stage">
+    <div
+      ref={previewDocumentRef}
+      className="preview-shell custom-scrollbar"
+      data-testid="preview-stage"
+    >
       {manifest.pages.map((page, index) => (
         <PreviewPageCard
           key={page.id}
@@ -293,3 +450,10 @@ export default function PreviewStage({ manifest, slides, assets = [], currentSli
     </div>
   );
 }
+
+
+
+
+
+
+

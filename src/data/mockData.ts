@@ -22,7 +22,7 @@ export const mockSlides: SlideSource[] = [
   return (
     <div className="flex h-full w-full items-center justify-center bg-slate-950 p-14 text-white">
       <section className="max-w-5xl">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-200">LumeSync</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-cyan-200">LumeSync</p>
         <h1 className="mt-5 text-6xl font-black leading-tight">从这里开始编辑你的课件。</h1>
         <p className="mt-6 max-w-3xl text-xl leading-9 text-slate-200">
           右侧栏不再注入模拟对话。你输入真实需求后，AI 对话记录才会出现在这里。

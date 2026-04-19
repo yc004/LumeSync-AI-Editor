@@ -72,7 +72,7 @@ const runtimeReactDOM = {
   createPortal,
 };
 
-let runtimePromise: Promise<CoreRuntimeApi> | null = null;
+const runtimePromises = new WeakMap<CoreWindow, Promise<CoreRuntimeApi>>();
 
 const compileRuntimeSource = (fileName: string, source: string) => {
   const compiled = Babel.transform(source, {
@@ -101,13 +101,14 @@ const executeRuntimeBundle = (runtimeWindow: CoreWindow) => {
   evaluator.call(runtimeWindow, `${compiledBundle}\n//# sourceURL=lumesync-core-runtime/sdk-bundle.js`);
 };
 
-export async function ensureCoreRuntime(): Promise<CoreRuntimeApi> {
-  if (runtimePromise) {
-    return runtimePromise;
+export async function ensureCoreRuntime(targetWindow: Window = window): Promise<CoreRuntimeApi> {
+  const runtimeWindow = targetWindow as CoreWindow;
+  const existingPromise = runtimePromises.get(runtimeWindow);
+  if (existingPromise) {
+    return existingPromise;
   }
 
-  runtimePromise = Promise.resolve().then(() => {
-    const runtimeWindow = window as CoreWindow;
+  const runtimePromise = Promise.resolve().then(() => {
     const runtimeGlobals = runtimeWindow as unknown as {
       Babel?: typeof Babel;
       React?: typeof React;
@@ -137,5 +138,6 @@ export async function ensureCoreRuntime(): Promise<CoreRuntimeApi> {
     return api as CoreRuntimeApi;
   });
 
+  runtimePromises.set(runtimeWindow, runtimePromise);
   return runtimePromise;
 }
