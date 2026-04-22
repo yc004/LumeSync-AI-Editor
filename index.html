@@ -25,7 +25,7 @@
       };
       Object.entries(defaults).forEach(([key, value]) => {
         if (!getComputedStyle(root).getPropertyValue(key).trim()) {
-          root.style.setProperty(key, value);
+          root.style.setProperty(key, value );
         }
       });
     </script>
